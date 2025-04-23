@@ -1,59 +1,86 @@
-'use client';
-import { useRef, useEffect, useState } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import '@tensorflow/tfjs-backend-webgl';
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
+import { useRef, useEffect, useState } from "react";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import * as tf from "@tensorflow/tfjs";
+import "@tensorflow/tfjs-backend-webgl";
+import * as cocoSsd from "@tensorflow-models/coco-ssd";
 
 export default function CameraScanner({ onUpdate }) {
   const videoRef = useRef();
   const canvasRef = useRef();
   const [model, setModel] = useState(null);
+  const [detections, setDetections] = useState([]); // <-- track each frame
 
+  // load model
   useEffect(() => {
     cocoSsd.load().then(setModel);
   }, []);
 
+  // once model is ready
   useEffect(() => {
     if (!model) return;
-    let animationId;
+    let rafId;
+
     async function setup() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       videoRef.current.srcObject = stream;
-      await new Promise(r => videoRef.current.onloadedmetadata = r);
+      await new Promise((r) => (videoRef.current.onloadedmetadata = r));
       videoRef.current.play();
-      detect();
+      detectFrame();
     }
 
-    async function detect() {
+    async function detectFrame() {
       const predictions = await model.detect(videoRef.current);
-      const ctx = canvasRef.current.getContext('2d');
+      // filter & map
+      const good = predictions
+        .filter((p) => p.score > 0.6)
+        .map((p) => ({
+          class: p.class,
+          x: p.bbox[0],
+          y: p.bbox[1],
+          w: p.bbox[2],
+          h: p.bbox[3],
+        }));
+
+      // draw boxes on canvas
+      const ctx = canvasRef.current.getContext("2d");
       canvasRef.current.width = videoRef.current.videoWidth;
       canvasRef.current.height = videoRef.current.videoHeight;
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-      predictions.forEach(pred => {
-        if (pred.score > 0.6) {
-          const [x, y, w, h] = pred.bbox;
-          ctx.strokeStyle = '#00FF00';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(x, y, w, h);
-          ctx.font = '18px Arial';
-          ctx.fillStyle = '#00FF00';
-          ctx.fillText(pred.class, x, y - 5);
-          onUpdate(pred.class);
-        }
+      good.forEach((d) => {
+        ctx.strokeStyle = "#00FF00";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(d.x, d.y, d.w, d.h);
       });
-      animationId = requestAnimationFrame(detect);
+
+      // update state & notify parent
+      setDetections(good);
+      good.forEach((d) => onUpdate(d.class));
+
+      rafId = requestAnimationFrame(detectFrame);
     }
 
     setup();
-    return () => cancelAnimationFrame(animationId);
+    return () => cancelAnimationFrame(rafId);
   }, [model, onUpdate]);
 
   return (
-    <div className="relative">
+    <div className="relative w-full h-full">
       <video ref={videoRef} className="w-full rounded-xl" />
-      <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full" />
+      <canvas ref={canvasRef} className="absolute inset-0 hidden" />
+
+      {/* AR Cards */}
+      {detections.map((d, i) => (
+        <div
+          key={`${d.class}-${i}`}
+          className="absolute flex justify-center items-center"
+          style={{
+            left: d.x + "px",
+            top: Math.max(0, d.y - 30) + "px", // 30px above box
+          }}
+        >
+          <p className="font-xl p-5 bg-black text-white">{d.class}</p>
+        </div>
+      ))}
     </div>
   );
 }
