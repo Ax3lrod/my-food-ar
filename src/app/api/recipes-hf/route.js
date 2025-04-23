@@ -7,7 +7,7 @@ export async function POST(req) {
   try {
     const { items } = await req.json();
     // Clear instruction-style prompt
-    const prompt = `You are an experienced chef. I have these ingredients: ${items.join(', ')}. Please suggest a quick and tasty recipe, listing ingredients and step-by-step instructions.`;
+    const prompt = `Do not use any markdown settings, you are an experienced chef. I have these ingredients: ${items.join(', ')}. Please suggest a quick and tasty recipe, listing ingredients and step-by-step instructions.`;
 
     // Use a model known to be supported by HF Inference
     const res = await hf.textGeneration({

@@ -11,7 +11,7 @@ export async function POST(req) {
         {
           role: "user",
           content:
-            "You are a world-class chef assistant. I have these ingredients: " +
+            "Do not use any markdown settings, You are a world-class chef assistant. I have these ingredients: " +
             items.join(", ") +
             ". Please suggest a quick and tasty recipe, listing ingredients and step-by-step instructions.",
         },
